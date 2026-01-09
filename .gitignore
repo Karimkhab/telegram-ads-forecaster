@@ -1,35 +1,66 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Virtual env
-.venv/
+# Virtual environments
 venv/
+env/
+ENV/
+.venv
 
-# Jupyter
-.ipynb_checkpoints/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Local configs / secrets
+# Environment variables
 .env
-*.local
+.env.local
+
+# Artifacts (модели, данные)
+artifacts/*.pkl
+artifacts/*.joblib
+artifacts/*.h5
+artifacts/*.pt
+artifacts/*.pth
+artifacts/*.csv
+artifacts/*.json
+!artifacts/.gitkeep
 
 # Data
-data/
-!data/**/.gitkeep
+data/*.csv
+data/*.xlsx
+data/*.parquet
+!data/.gitkeep
 
-# Models / artifacts
-models/*
-!models/.gitkeep
-*.pkl
-*.cbm
-*.joblib
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
 
-# OS/IDE
+# Logs
+*.log
+logs/
+
+# OS
 .DS_Store
-.idea/
-.vscode/
+Thumbs.db
