@@ -39,6 +39,7 @@ ENV/
 
 # Artifacts (модели, данные)
 artifacts/*.pkl
+artifacts/*.cbm
 artifacts/*.joblib
 artifacts/*.h5
 artifacts/*.pt
@@ -53,9 +54,6 @@ data/*.xlsx
 data/*.parquet
 !data/.gitkeep
 
-# Jupyter Notebooks
-.ipynb_checkpoints
-*.ipynb
 
 # Logs
 *.log
