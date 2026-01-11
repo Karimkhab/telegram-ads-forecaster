@@ -2,8 +2,7 @@
 
 Forecasting Telegram ad reach (VIEWS) from CPM, channel, and date.
 
-This repository is a notebook-first project. The current model is a
-well-documented baseline aimed at being explainable rather than complex.
+This repository is a notebook-first project.
 
 ## Project status
 
@@ -19,9 +18,6 @@ well-documented baseline aimed at being explainable rather than complex.
 - `TestDataset.csv`: 3 input features only (CPM, CHANNEL_NAME, DATE),
   `VIEWS` is empty.
 
-Important: the organizers published an updated TestDataset where there
-are no overlapping keys (CPM, CHANNEL_NAME, DATE) with AllData. This
-removes leakage and makes evaluation harder but fair.
 
 ## Notebooks (main work)
 
