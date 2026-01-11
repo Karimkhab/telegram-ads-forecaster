@@ -47,7 +47,6 @@ artifacts/*.pth
 artifacts/*.csv
 artifacts/*.json
 !artifacts/.gitkeep
-artifacts_v2/
 catboost_info/
 outputs/
 

@@ -1,197 +1,86 @@
 # Telegram Ads Views Forecaster
 
-ML-модель для прогнозирования количества просмотров (охвата) рекламных объявлений в Telegram на основе CPM, канала размещения и даты.
+Forecasting Telegram ad reach (VIEWS) from CPM, channel, and date.
 
-## Описание проекта
+This repository is a notebook-first project. The current model is a
+well-documented baseline aimed at being explainable rather than complex.
 
-Веб-сервис с REST API для предсказания количества просмотров рекламного объявления в Telegram. Модель использует исторические данные для обучения и предсказывает VIEWS на основе:
-- **CPM** (стоимость за 1000 показов)
-- **CHANNEL_NAME** (канал размещения)
-- **DATE** (дата размещения)
+## Project status
 
-## Структура проекта
+- EDA and modeling live in notebooks.
+- The API and CLI in `src/` and `scripts/` are scaffolding and not the
+  primary entry point yet.
+- The goal of this repo is clarity: how the data behaves, what signal is
+  available, and why the model looks the way it does.
+
+## Data
+
+- `AllData.csv`: 7 columns, includes target `VIEWS`.
+- `TestDataset.csv`: 3 input features only (CPM, CHANNEL_NAME, DATE),
+  `VIEWS` is empty.
+
+Important: the organizers published an updated TestDataset where there
+are no overlapping keys (CPM, CHANNEL_NAME, DATE) with AllData. This
+removes leakage and makes evaluation harder but fair.
+
+## Notebooks (main work)
+
+- `notebooks/EDA.ipynb`: data profiling, distributions, correlations,
+  seasonality, and noise checks.
+- `notebooks/model_v1.ipynb`: baseline model with clear feature logic,
+  training, and submission export.
+
+## Key findings from EDA
+
+- `VIEWS` and `CPM` are heavy-tailed. Log transforms are usually better.
+- Global CPM to VIEWS correlation is weak, but within-channel correlation
+  is often positive.
+- Channels are very sparse: most have fewer than 10 rows.
+- There is label noise: identical (CPM, CHANNEL_NAME, DATE) can map to
+  different VIEWS.
+- Train dates start in 2024, while test includes 2023. Absolute time
+  features can hurt generalization.
+
+## Modeling approach (current)
+
+- Target: `log1p(VIEWS)` to stabilize heavy tails.
+- CPM features: `log_cpm` and relative CPM to channel median.
+- Channel features: shrinked channel median and frequency.
+- Date features: yearless seasonality (dow, month, day-of-year cycles).
+
+The model is intentionally simple and explainable.
+
+## Limitations and constraints
+
+- At inference time only 3 features are available (CPM, channel, date).
+- Many channels have too few examples to learn reliable behavior.
+- Noise in labels creates a hard error floor.
+- Unknown competition metric and public test distribution shift make
+  offline validation noisy.
+- Large improvements likely require external channel metadata
+  (subscribers, ER, topic), which is not currently used.
+
+## Project structure
 
 ```
 telegram-ads-forecaster/
-├── README.md
-├── .gitignore
-├── requirements.txt
-├── .env.example
-├── Хакатон_Постановка_Задачи_Трек_2.pdf
 ├── notebooks/
 │   ├── EDA.ipynb
 │   └── model_v1.ipynb
 ├── reports/
 │   └── report.tex
-├── src/
-│   ├── app/
-│   │   ├── main.py            # FastAPI вход
-│   │   ├── schemas.py         # Pydantic модели запрос/ответ
-│   │   └── predictor.py       # загрузка модели + predict()
-│   ├── core/
-│   │   └── config.py          # конфиг/пути/настройки
-│   ├── features/
-│   │   └── build_features.py  # построение фичей из CPM/DATE/CHANNEL_NAME
-│   └── train/
-│       └── train_model.py     # обучение модели
-├── scripts/
-│   ├── train.py               # CLI для обучения модели
-│   └── fill_test_dataset.py   # CLI для заполнения тестового датасета
-├── tests/
-│   ├── test_health.py
-│   └── test_predict_contract.py
-├── artifacts/                 # обученные модели и артефакты (не в git)
-├── data/                      # данные для обучения (не в git)
-└── outputs/                   # результаты предсказаний (не в git)
+├── src/                 # API/feature code (scaffold)
+├── scripts/             # CLI helpers (scaffold)
+├── artifacts/           # models and artifacts (not in git)
+├── outputs/             # submission files (not in git)
+├── data/                # local datasets (not in git)
+└── requirements.txt
 ```
 
-## Установка
+## Setup
 
-1. Клонируйте репозиторий:
-```bash
-git clone <repository-url>
-cd telegram-ads-forecaster
-```
-
-2. Создайте виртуальное окружение:
 ```bash
 python -m venv venv
-source venv/bin/activate  # для Windows: venv\Scripts\activate
-```
-
-3. Установите зависимости:
-```bash
+source venv/bin/activate
 pip install -r requirements.txt
 ```
-
-4. Настройте переменные окружения:
-```bash
-cp .env.example .env
-# Отредактируйте .env файл при необходимости
-```
-
-## Запуск API
-
-```bash
-uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-API будет доступен по адресу: `http://localhost:8000`
-
-## API Endpoints
-
-### Health Check
-```
-GET /health
-```
-
-### Прогноз просмотров
-```
-POST /predict
-Body: {
-    "cpm": 100.0,
-    "channel": "channel_name",
-    "date": "2024-01-15"
-}
-```
-
-## Обучение модели
-
-### Подготовка данных
-
-Поместите файл `AllData.csv` в папку `data/`. Файл должен содержать колонки:
-- `AD_ID` - уникальный идентификатор объявления
-- `CPM` - стоимость за 1000 показов
-- `VIEWS` - количество просмотров (целевая переменная)
-- `CLICKS` - количество кликов
-- `ACTIONS` - количество действий
-- `CHANNEL_NAME` - название канала размещения
-- `DATE` - дата размещения
-
-**Важно:** В CSV файле названия колонок могут содержать ведущие пробелы (например `" CPM"`). Код автоматически обрабатывает это.
-
-### Обучение
-
-Запустите скрипт обучения:
-
-```bash
-python scripts/train.py --data data/AllData.csv --artifacts artifacts --holdout-days 30
-```
-
-Параметры:
-- `--data` - путь к файлу AllData.csv (обязательно)
-- `--artifacts` - директория для сохранения артефактов (по умолчанию: `artifacts`)
-- `--holdout-days` - количество дней для holdout набора (по умолчанию: 30)
-- `--backtesting` - включить backtesting на 3 фолда (опционально)
-
-Скрипт:
-1. Загружает данные и выполняет time-based split (последние N дней - holdout)
-2. Строит фичи из CPM, DATE, CHANNEL_NAME
-3. Обучает две модели:
-   - **Модель A**: CatBoost на `log1p(VIEWS)` с loss RMSE
-   - **Модель B**: CatBoost на `VIEWS` с loss MAE
-4. Выбирает лучшую модель по MAE на holdout
-5. Сохраняет:
-   - `artifacts/model.cbm` - обученная модель
-   - `artifacts/model_meta.json` - метаданные модели
-   - `artifacts/preprocess.json` - параметры препроцессинга (клиппинг, биннинг)
-   - `artifacts/channel_freq.json` - частоты каналов
-   - `artifacts/metrics.json` - метрики качества (MAE, RMSE, RMSLE, SMAPE)
-
-### Заполнение тестового датасета
-
-Для заполнения тестового датасета предсказаниями:
-
-```bash
-python scripts/fill_test_dataset.py \
-    --input data/TestDataset.csv \
-    --output outputs/TestDataset_filled.csv \
-    --artifacts artifacts
-```
-
-Параметры:
-- `--input` - путь к TestDataset.csv (обязательно)
-- `--output` - путь для сохранения результата (обязательно)
-- `--artifacts` - директория с обученной моделью (по умолчанию: `artifacts`)
-
-Тестовый датасет должен содержать колонки: `CPM`, `CHANNEL_NAME`, `DATE` (и опционально пустую `VIEWS`).
-
-## Особенности реализации
-
-### Фичи
-
-Модель использует только `CPM`, `DATE`, `CHANNEL_NAME` (нельзя использовать `AD_ID`, `CLICKS`, `ACTIONS`):
-
-1. **CPM фичи:**
-   - `cpm` - базовое значение
-   - `log_cpm` - `log1p(cpm)`
-   - `cpm_clip` - клиппинг по 99.5 перцентилю
-   - `cpm_bin` - квантильный биннинг (20 бинов)
-
-2. **DATE фичи:**
-   - `dow` - день недели (0-6)
-   - `is_weekend` - выходной день
-   - `day`, `month`, `weekofyear`, `dayofyear`
-   - Циклические фичи: `dow_sin`, `dow_cos`, `dayofyear_sin`, `dayofyear_cos`
-
-3. **CHANNEL_NAME фичи:**
-   - `channel` - категориальный признак (обрабатывается CatBoost)
-   - `channel_freq` - частота канала в обучающей выборке
-
-### Метрики
-
-Модель оценивается по следующим метрикам:
-- **MAE** (Mean Absolute Error)
-- **RMSE** (Root Mean Squared Error)
-- **RMSLE** (Root Mean Squared Log Error)
-- **SMAPE** (Symmetric Mean Absolute Percentage Error)
-
-## Тестирование
-
-```bash
-pytest tests/
-```
-
-## Лицензия
-
-MIT
