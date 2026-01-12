@@ -1,0 +1,184 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{amsmath}
+
+\newcommand{\maybegraphic}[2]{%
+    \IfFileExists{#1}{\includegraphics[width=#2\textwidth]{#1}}{\fbox{Missing file: #1}}%
+}
+
+\title{Telegram Ads Forecasting -- Model v1 Report}
+\author{Karim Khabib}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Executive Summary}
+The goal is to predict ad views (\texttt{VIEWS}) for Telegram channels given only
+three input features available at inference time: \texttt{CPM}, \texttt{CHANNEL\_NAME}, and \texttt{DATE}.
+The final Model v1 is an explainable CatBoost baseline that combines
+channel-level statistics, CPM-based effects, and yearless seasonality.
+
+Public leaderboard score (best run): \textbf{~0.927}.
+The main limitation is label noise and a weak global CPM--VIEWS relationship.
+Large gains likely require external channel metadata (subscribers, ER, topic).
+
+\section{Problem Statement}
+We must predict \texttt{VIEWS} for each row in the test set.
+The training set (\texttt{AllData.csv}) has 7 columns,
+while the test set includes only 3 input features.
+Therefore, the model must be built using only the features
+available at inference time.
+
+\section{Data Overview}
+\subsection{Train/Test Summary}
+\begin{itemize}
+    \item Train size: 142,609 rows, 7 columns.
+    \item Test size: 318,722 rows, 4 columns (\texttt{VIEWS} missing).
+    \item Missing values: none in key fields.
+    \item Date range (train): 2024-10-02 to 2025-12-17 (441 days).
+    \item Unique channels (train): 35,957.
+    \item Unique channels (test): 6,751 (all appear in train).
+\end{itemize}
+
+\subsection{Distributions and Heavy Tails}
+Both \texttt{VIEWS} and \texttt{CPM} have heavy tails.
+This motivates training on log-transformed targets and features.
+
+\begin{figure}[h]
+    \centering
+    \maybegraphic{figures/views_distribution.png}{0.85}
+    \caption{Distribution of VIEWS (linear and log scales).}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \maybegraphic{figures/cpm_distribution.png}{0.85}
+    \caption{Distribution of CPM (linear and log scales).}
+\end{figure}
+
+\subsection{Channel Sparsity}
+Channels are highly sparse: median rows per channel = 2,
+90\% have at most 9 rows, and the maximum is 137.
+This requires shrinkage toward global statistics to avoid overfitting.
+
+\begin{figure}[h]
+    \centering
+    \maybegraphic{figures/channel_counts_hist.png}{0.85}
+    \caption{Histogram of rows per channel.}
+\end{figure}
+
+\section{EDA Findings}
+\subsection{Global vs. Within-Channel CPM Relationship}
+Global correlation between \texttt{CPM} and \texttt{VIEWS} is weak.
+However, within-channel correlations are often positive.
+This suggests that CPM is informative only after conditioning on channel.
+
+\begin{figure}[h]
+    \centering
+    \maybegraphic{figures/corr_heatmap.png}{0.85}
+    \caption{Pearson/Spearman correlation on log-transformed variables.}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \maybegraphic{figures/cpm_views_binned.png}{0.85}
+    \caption{Binned CPM -- VIEWS dependency (median and IQR).}
+\end{figure}
+
+\subsection{Seasonality}
+Yearless seasonality (day-of-week and day-of-year cycles) shows mild patterns,
+so we keep simple date features without absolute time trends.
+
+\begin{figure}[h]
+    \centering
+    \maybegraphic{figures/dow_seasonality.png}{0.75}
+    \caption{Average VIEWS by day of week.}
+\end{figure}
+
+\section{Modeling Approach}
+\subsection{Target Transformation}
+We predict \(\log(1 + \texttt{VIEWS})\) and invert predictions with \(\exp(x) - 1\).
+This stabilizes variance and reduces the impact of extreme outliers.
+
+\subsection{Features}
+\begin{itemize}
+    \item \textbf{CPM features:} \texttt{log\_cpm}, \texttt{cpm\_to\_ch\_median}.
+    \item \textbf{Channel features:} smoothed median of log views,
+    smoothed CTR, smoothed actions rate, CPM slope,
+    and expected log prediction \texttt{ch\_log\_pred}.
+    \item \textbf{Date features:} \texttt{dow}, \texttt{is\_weekend}, \texttt{month},
+    \texttt{doy\_sin}, \texttt{doy\_cos}.
+\end{itemize}
+
+All channel-level statistics are computed on train only and smoothed
+with shrinkage factors to avoid overfitting.
+
+\subsection{Model and Post-Processing}
+\begin{itemize}
+    \item Model: \texttt{CatBoostRegressor} with MAE objective.
+    \item Post-processing: prediction blending with channel baselines,
+    optional clipping by per-channel quantiles, optional scaling.
+\end{itemize}
+
+\section{Training and Validation}
+We use a time-based holdout of the last 30 days for quick local checks.
+However, the public test set contains earlier dates, so local validation
+is not fully aligned with the leaderboard.
+
+\section{Metric Exploration}
+The public metric is not documented. We probed it with constant predictions:
+
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+Constant prediction & Public score \\
+\midrule
+0 & 1.0000 \\
+300 & 0.9427 \\
+1000 & 1.0938 \\
+3000 & 1.9048 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This behavior suggests a relative-error metric (MAPE/SMAPE-like),
+where large overestimates are heavily penalized.
+Therefore, conservative predictions and clipping help.
+
+\section{Results}
+Best public score achieved with Model v1: \textbf{~0.927}.
+This is stronger than naive baselines but still far from ideal,
+primarily due to noise and missing channel metadata.
+
+\section{Error Analysis}
+\begin{itemize}
+    \item The same (\texttt{CPM}, \texttt{CHANNEL\_NAME}, \texttt{DATE})
+    can map to different \texttt{VIEWS}, indicating label noise.
+    \item Most channels have very few examples, so channel statistics are noisy.
+    \item CPM is weak globally; it matters mostly within channels.
+\end{itemize}
+
+\section{Limitations}
+\begin{itemize}
+    \item Only three features are available at inference time.
+    \item Channel metadata (subscribers, ER, topic) is missing.
+    \item Validation is misaligned with the test temporal distribution.
+    \item The evaluation metric is unknown and favors conservative predictions.
+\end{itemize}
+
+\section{Future Work}
+\begin{itemize}
+    \item Enrich channels with external metadata (subscribers, ER, topic).
+    \item Try monotonic constraints or isotonic regression for CPM within channels.
+    \item Use per-channel KNN over CPM as a local smoother.
+    \item Build a better validation scheme aligned with test distribution.
+\end{itemize}
+
+
+\end{document}
