@@ -1,77 +1,91 @@
 # Telegram Ads Views Forecaster
 
-Forecasting Telegram ad reach (VIEWS) from CPM, channel, and date.
+<p align="center">
+  <img src="reports/figures/telegram_ads_picture.jpg" alt="Telegram Ads Forecasting" width="900" />
+</p>
 
-This repository is a notebook-first project.
+<p align="center">
+  Forecasting Telegram ad reach (VIEWS) from CPM, channel, and date.
+</p>
 
-## Project status
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License" /></a>
+  <a href="notebooks/EDA.ipynb"><img src="https://img.shields.io/badge/EDA-notebook-blue.svg" alt="EDA Notebook" /></a>
+  <a href="notebooks/model_v1.ipynb"><img src="https://img.shields.io/badge/Model-v1-blue.svg" alt="Model v1 Notebook" /></a>
+  <a href="reports/report.pdf"><img src="https://img.shields.io/badge/Report-PDF-orange.svg" alt="Report PDF" /></a>
+</p>
 
-- EDA and modeling live in notebooks.
-- The API and CLI in `src/` and `scripts/` are scaffolding and not the
-  primary entry point yet.
-- The goal of this repo is clarity: how the data behaves, what signal is
-  available, and why the model looks the way it does.
+---
 
-## Data
+## Why this project
 
-- `AllData.csv`: 7 columns, includes target `VIEWS`.
-- `TestDataset.csv`: 3 input features only (CPM, CHANNEL_NAME, DATE),
-  `VIEWS` is empty.
+We want a **clear, explainable baseline** that predicts ad views using only the
+three features available at inference time: `CPM`, `CHANNEL_NAME`, and `DATE`.
+The goal is not a black box, but a model that can be **explained**, **debugged**,
+and **reused** in a real product context.
+
+Key ideas:
+- Heavy tails in `VIEWS` and `CPM` require log transforms.
+- CPM is weak globally but meaningful **within channels**.
+- Channels are sparse, so **shrinkage** is essential.
+- We prefer yearless seasonality to avoid temporal leakage.
+
+---
+
+## What is included
+
+- **EDA notebook** with distributions, correlations, seasonality, and noise checks: `notebooks/EDA.ipynb`.
+- **Model v1 notebook** with a clean feature pipeline and submission export: `notebooks/model_v1.ipynb`.
+- **Python pipeline** in `src/` mirroring the notebook for clean reuse.
+- **Report** in LaTeX + PDF with full analysis and limitations: `reports/report.tex`, `reports/report.pdf`.
+
+---
 
 
-## Notebooks (main work)
+## Model v1 (current)
 
-- `notebooks/EDA.ipynb`: data profiling, distributions, correlations,
-  seasonality, and noise checks.
-- `notebooks/model_v1.ipynb`: baseline model with clear feature logic,
-  training, and submission export.
+Notebook: `notebooks/model_v1.ipynb`
 
-## Key findings from EDA
+**Target:** `log1p(VIEWS)`
 
-- `VIEWS` and `CPM` are heavy-tailed. Log transforms are usually better.
-- Global CPM to VIEWS correlation is weak, but within-channel correlation
-  is often positive.
-- Channels are very sparse: most have fewer than 10 rows.
-- There is label noise: identical (CPM, CHANNEL_NAME, DATE) can map to
-  different VIEWS.
-- Train dates start in 2024, while test includes 2023. Absolute time
-  features can hurt generalization.
+**Features:**
+- CPM: `log_cpm`, `cpm_to_ch_median`
+- Channel stats (smoothed): median views, CTR, actions rate, CPM slope
+- Date: day of week, month, day-of-year cycles
 
-## Modeling approach (current)
+**Post-processing:**
+- Blend with channel baseline
+- Optional clipping by per-channel quantiles
+- Optional scaling to align with the leaderboard metric
 
-- Target: `log1p(VIEWS)` to stabilize heavy tails.
-- CPM features: `log_cpm` and relative CPM to channel median.
-- Channel features: shrinked channel median and frequency.
-- Date features: yearless seasonality (dow, month, day-of-year cycles).
+**Best public score:** ~0.927
 
-The model is intentionally simple and explainable.
-
-## Limitations and constraints
-
-- At inference time only 3 features are available (CPM, channel, date).
-- Many channels have too few examples to learn reliable behavior.
-- Noise in labels creates a hard error floor.
-- Unknown competition metric and public test distribution shift make
-  offline validation noisy.
-- Large improvements likely require external channel metadata
-  (subscribers, ER, topic), which is not currently used.
+---
 
 ## Project structure
 
 ```
 telegram-ads-forecaster/
-├── notebooks/
-│   ├── EDA.ipynb
-│   └── model_v1.ipynb
-├── reports/
-│   └── report.tex
-├── src/                 # API/feature code (scaffold)
-├── scripts/             # CLI helpers (scaffold)
-├── artifacts/           # models and artifacts (not in git)
-├── outputs/             # submission files (not in git)
-├── data/                # local datasets (not in git)
-└── requirements.txt
+|-- notebooks/
+|   |-- EDA.ipynb
+|   `-- model_v1.ipynb
+|-- reports/
+|   |-- report.tex
+|   `-- report.pdf
+|-- src/
+|   |-- core/
+|   |-- features/
+|   `-- train/
+|-- scripts/
+|   |-- train.py
+|   `-- predict.py
+|-- artifacts/           # models and artifacts (not in git)
+|-- outputs/             # submission files (not in git)
+|-- data/                # local datasets (not in git)
+`-- requirements.txt
 ```
+
+---
 
 ## Setup
 
@@ -80,3 +94,65 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Place datasets in `data/`:
+- `data/AllData.csv`
+- `data/TestDataset.csv`
+
+---
+
+## How to run
+
+### 1) Notebook flow (main exploration)
+- `notebooks/EDA.ipynb`
+- `notebooks/model_v1.ipynb`
+
+### 2) Python pipeline (clean run)
+```bash
+python scripts/train.py
+```
+
+This will:
+- build features,
+- train Model v1,
+- save artifacts to `artifacts/`,
+- export the submission to `outputs/TestDataset_filled_model_v1.csv`.
+
+### 3) Predict from saved artifacts
+```bash
+python scripts/predict.py
+```
+
+---
+
+## Report
+
+- Full report: `reports/report.pdf`
+- Source (LaTeX): `reports/report.tex`
+
+If you want the detailed reasoning, limitations, and future work, start there.
+
+---
+
+## Limitations
+
+- Only three features are available at inference time.
+- Channels are sparse; many have <10 rows.
+- Label noise creates a hard error floor.
+- The public metric is unknown and favors conservative predictions.
+- Large gains likely require external metadata (subscribers, ER, topic).
+
+---
+
+## Roadmap
+
+- Add optional external channel metadata (TgStat / TG API).
+- Try monotonic or isotonic CPM constraints per channel.
+- Add per-channel KNN smoothing for CPM neighborhoods.
+- Provide a simple FastAPI inference endpoint.
+
+---
+
+## License
+
+MIT. See `LICENSE`.
