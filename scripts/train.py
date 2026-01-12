@@ -30,14 +30,14 @@ def main() -> None:
         use_channel_id=False,
         deduplicate=True,
         alpha_channel=10.0,
-        alpha_slope=50.0,
+        alpha_slope=5.0,
         min_slope_rows=20,
         use_pred_clip=True,
         pred_clip_q=0.65,
-        min_clip_rows=20,
+        min_clip_rows=27,
         blend_alpha=0.4,
         blend_base="ch_med",
-        scale_factor=1.0,
+        scale_factor=0.85,
     )
 
     np.random.seed(cfg.random_seed)
