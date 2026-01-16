@@ -13,6 +13,7 @@
   <a href="notebooks/EDA.ipynb"><img src="https://img.shields.io/badge/EDA-notebook-blue.svg" alt="EDA Notebook" /></a>
   <a href="notebooks/model_v1.ipynb"><img src="https://img.shields.io/badge/Model-v1-blue.svg" alt="Model v1 Notebook" /></a>
   <a href="reports/report.pdf"><img src="https://img.shields.io/badge/Report-PDF-orange.svg" alt="Report PDF" /></a>
+  <a href="reports/figures/record.mp4"><img src="https://img.shields.io/badge/Demo-Video-purple.svg" alt="Demo Video" /></a>
 </p>
 
 ---
@@ -122,6 +123,51 @@ This will:
 ```bash
 python scripts/predict.py
 ```
+
+---
+
+## API (FastAPI)
+
+Start the API locally:
+```bash
+uvicorn src.app.main:app --host 0.0.0.0 --port 8000
+```
+
+Health check:
+```bash
+curl http://localhost:8000/health
+```
+
+Swagger UI:
+```
+http://localhost:8000/docs
+```
+
+Example request:
+```bash
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"items": [{"cpm": 12.5, "channel_name": "some_channel", "date": "2025-01-15"}]}'
+```
+
+Swagger preview:
+<p align="center">
+  <img src="reports/figures/telegram_ads_forecaster_swagger.jpeg" alt="Swagger UI" width="900" />
+</p>
+
+### Public access with ngrok
+
+In a separate terminal:
+```bash
+ngrok http 8000
+```
+
+Then open:
+```
+https://<your-ngrok-subdomain>.ngrok-free.app/docs
+```
+
+
 
 ---
 
